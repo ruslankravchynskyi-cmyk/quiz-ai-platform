@@ -1,0 +1,21 @@
+from pydantic import BaseModel, Field
+from typing import List
+import uuid
+
+class QuizRequest(BaseModel):
+    text: str = Field(..., min_length=10)
+    count: int = Field(5, ge=1, le=10)
+    teacher_id: uuid.UUID
+
+class AnswerOption(BaseModel):
+    text: str
+    is_correct: bool
+
+class QuestionSchema(BaseModel):
+    question_text: str
+    answers: List[AnswerOption]
+    explanation: str
+
+class QuizGenerationResponse(BaseModel):
+    title: str
+    questions: List[QuestionSchema]

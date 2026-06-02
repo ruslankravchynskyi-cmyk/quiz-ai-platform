@@ -1,0 +1,10 @@
+import pytest
+from fastapi.testclient import TestClient
+from src.main import app
+
+def test_websocket_connection():
+    client = TestClient(app)
+    with client.websocket_connect("/ws/live/1234") as websocket:
+        websocket.send_json({"event": "JOIN_ROOM", "username": "TestStudent"})
+        data = websocket.receive_json()
+        assert data["event"] == "USER_CONNECTED"

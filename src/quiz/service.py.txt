@@ -1,0 +1,25 @@
+from openai import AsyncOpenAI
+from src.config import OPENAI_API_KEY
+from src.quiz.schemas import QuizGenerationResponse
+
+class AIService:
+    def __init__(self):
+        self.client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+
+    async def generate_quiz_from_text(self, text: str, question_count: int) -> QuizGenerationResponse:
+        system_prompt = (
+            "Ти — професійний укладач тестів. Проаналізуй текст і згенеруй тестові питання "
+            "з 4 варіантами відповідей (1 правильна). Відповідь надішли суворо у форматі JSON."
+        )
+        user_prompt = f"Згенеруй ровно {question_count} питань за текстом:\n\n{text}"
+
+        response = await self.client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format=QuizGenerationResponse,
+            temperature=0.3
+        )
+        return response.choices[0].message.parsed

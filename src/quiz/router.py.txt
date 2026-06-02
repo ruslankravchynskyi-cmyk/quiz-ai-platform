@@ -1,0 +1,39 @@
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from src.config import get_db
+from src.quiz.schemas import QuizRequest
+from src.quiz.service import AIService
+from src.quiz.models import Quiz, Question
+
+router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
+ai_service = AIService()
+
+@router.post("/generate", status_code=status.HTTP_201_CREATED)
+async def generate_quiz(payload: QuizRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        ai_data = await ai_service.generate_quiz_from_text(payload.text, payload.count)
+        
+        new_quiz = Quiz(
+            title=ai_data.title,
+            description=f"Згенерувано ШІ. Питань: {payload.count}",
+            creator_id=payload.teacher_id,
+            source_text=payload.text
+        )
+        db.add(new_quiz)
+        await db.flush()
+
+        for q in ai_data.questions:
+            answers_list = [dict(option) for option in q.answers]
+            new_question = Question(
+                quiz_id=new_quiz.id,
+                question_text=q.question_text,
+                answers=answers_list,
+                explanation=q.explanation
+            )
+            db.add(new_question)
+
+        await db.commit()
+        return {"status": "success", "quiz_id": str(new_quiz.id), "title": new_quiz.title}
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))

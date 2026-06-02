@@ -1,0 +1,46 @@
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from contextlib import asynccontextmanager
+import json
+from src.config import engine, Base
+from src.quiz.router import router as quiz_router
+from src.websocket.manager import manager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await engine.dispose()
+
+app = FastAPI(
+    title="Серверна платформа ШІ-тестування", 
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.include_router(quiz_router)
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "quiz-ai-core", "code": 200}
+
+@app.websocket("/ws/live/{pin}")
+async def websocket_endpoint(websocket: WebSocket, pin: str):
+    await manager.connect(pin, websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message_data = json.loads(data)
+            event_type = message_data.get("event")
+            
+            if event_type == "JOIN_ROOM":
+                await manager.broadcast_to_room(pin, {
+                    "event": "USER_CONNECTED",
+                    "username": message_data.get("username")
+                })
+            elif event_type == "START_QUIZ":
+                await manager.broadcast_to_room(pin, {
+                    "event": "GAME_STARTED"
+                })
+    except WebSocketDisconnect:
+        manager.disconnect(pin, websocket)
